@@ -2,41 +2,54 @@ const express = require("express")
 const userModel = require("../models/user.model")
 const jwt = require("jsonwebtoken")
 const crypto = require("crypto")
+const { json } = require("stream/consumers")
 const authRouter = express.Router()
 
+
 authRouter.post("/register", async(req, res) => {
-    const { email, name, password } = req.body
-
+    const { name, email, password } = req.body;
     const isUserAlreadyExists = await userModel.findOne({ email })
-
     if (isUserAlreadyExists) {
-        return res.status(400).json({
-            message: "User already exists with this email address"
+        return res.status(409).json({
+            message: "User already exists with this email",
         })
-
     }
 
-    const hash = crypto.createHash("md5").update(password).digest("hex")
+
+
     const user = await userModel.create({
-        email,
         name,
-        hash
+        email,
+        password: crypto.createHash("md5").update(password).digest("hex"),
     })
 
     const token = jwt.sign({
-            id: user._id,
-            email: user.email
-        },
-        process.env.JWT_SECRET
-    )
+        id: user._id,
+        email: user.email
+    }, process.env.JWT_SECRET, { expiresIn: "1h" })
 
-    res.cookie("jwt_token", token)
+    res.cookies("jwt_token", token)
 
     res.status(201).json({
-        message: "user registered",
+        message: "Registered successfully",
         user,
         token
     })
+
+})
+
+authRouter.get("/get-me", async(req, res) = {
+    const token = req.cookies.token
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    const user = await userModel.findById(decoded._id)
+
+    res.json({
+        name: user.name,
+        email: user.email
+    })
+
 })
 
 authRouter.post("/login", async(req, res) => {
@@ -45,28 +58,28 @@ authRouter.post("/login", async(req, res) => {
     const user = await userModel.findOne({ email })
 
     if (!user) {
-        return res.status(401).json({
-            message: "User not found"
+        return res.status(409).json({
+            message: "User does not exists"
         })
     }
 
     const isPassword = user.password === crypto.createHash("md5").update(password).digest("hex")
 
     if (!isPassword) {
-        return res.status(401).json({
+        return res.status(409).json({
             message: "Invalid Password"
         })
     }
 
     const token = jwt.sign({
         id: user._id,
-        email: user.email,
-    }, process.env.JWT_SECRET)
+        email: user.email
+    }, process.env.JWT_SECRET, { expiresIn: "1h" })
 
-    res.cookie("jwt_token", token)
+    res.cookies("jwt_token", token)
 
     res.status(201).json({
-        message: "Logged In Successfully",
+        message: "Login Successful",
         user,
         token
     })
